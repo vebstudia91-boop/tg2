@@ -50,30 +50,82 @@ def save_posts(posts: dict):
         json.dump(posts, f, ensure_ascii=False, indent=2)
 
 
-async def download_image(client: TelegramClient, message: Message, post_id: str) -> str | None:
-    """Скачивает изображение из сообщения."""
+async def download_images(client: TelegramClient, message: Message, post_id: str) -> list[str]:
+    """Скачивает все изображения из сообщения (поддержка альбомов)."""
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
     
+    downloaded_files = []
+    
+    # Проверяем наличие медиа
+    if not message.media:
+        return downloaded_files
+    
+    media = message.media
+    
+    # Обработка альбома фотографий (MessageMediaGroup)
+    from telethon.tl.types import MessageMediaGroup
+    
+    if isinstance(media, MessageMediaGroup) and hasattr(media, 'grouped_id') and media.grouped_id:
+        # Получаем все сообщения из альбома
+        async for grouped_message in client.iter_messages(
+            message.chat_id, 
+            filter=lambda m: m.grouped_id == media.grouped_id
+        ):
+            if grouped_message.media:
+                filename = await _download_single_image(grouped_message, post_id, len(downloaded_files))
+                if filename:
+                    downloaded_files.append(filename)
+    else:
+        # Обработка одиночного изображения
+        filename = await _download_single_image(message, post_id, 0)
+        if filename:
+            downloaded_files.append(filename)
+    
+    return downloaded_files
+
+
+async def _download_single_image(message: Message, post_id: str, index: int) -> str | None:
+    """Скачивает одно изображение из сообщения."""
     media = message.media
     if not media:
         return None
     
-    # Проверяем наличие фото или документа с изображением
     file_path = None
+    filename = None
     
     if hasattr(media, 'photo') and media.photo:
-        filename = f"{post_id}.jpg"
+        ext = 'jpg'
+        if index > 0:
+            filename = f"{post_id}_{index}.{ext}"
+        else:
+            filename = f"{post_id}.{ext}"
         file_path = IMAGES_DIR / filename
+        
+        # Проверяем, существует ли уже файл
+        if file_path.exists():
+            print(f"Изображение {filename} уже существует, пропускаем скачивание")
+            return filename
+        
         await client.download_media(media.photo, file_path)
         return filename
+    
     elif hasattr(media, 'document') and media.document:
         # Проверяем, является ли документ изображением
         if media.document.mime_type and media.document.mime_type.startswith('image/'):
             ext = media.document.mime_type.split('/')[-1]
             if ext == 'jpeg':
                 ext = 'jpg'
-            filename = f"{post_id}.{ext}"
+            if index > 0:
+                filename = f"{post_id}_{index}.{ext}"
+            else:
+                filename = f"{post_id}.{ext}"
             file_path = IMAGES_DIR / filename
+            
+            # Проверяем, существует ли уже файл
+            if file_path.exists():
+                print(f"Изображение {filename} уже существует, пропускаем скачивание")
+                return filename
+            
             await client.download_media(media.document, file_path)
             return filename
     
@@ -131,17 +183,19 @@ async def main():
             "text": message.text or "",
             "views": message.views if hasattr(message, 'views') else None,
             "forwards": message.forwards if hasattr(message, 'forwards') else None,
-            "image": None,
+            "images": [],  # Теперь поддерживаем несколько изображений
             "downloaded_at": datetime.now().isoformat()
         }
         
-        # Скачиваем изображение если есть
+        # Скачиваем все изображения если есть (поддержка альбомов)
         if message.media:
-            image_filename = await download_image(client, message, post_id)
-            if image_filename:
-                post_data["image"] = image_filename
-                downloaded_images_count += 1
-                print(f"Скачано изображение: {image_filename}")
+            image_filenames = await download_images(client, message, post_id)
+            if image_filenames:
+                post_data["images"] = image_filenames
+                downloaded_images_count += len(image_filenames)
+                print(f"Скачано изображений для поста #{post_id}: {len(image_filenames)}")
+                for filename in image_filenames:
+                    print(f"  - {filename}")
         
         # Сохраняем пост
         existing_posts[post_id] = post_data
