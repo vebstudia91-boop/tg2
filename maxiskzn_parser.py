@@ -25,8 +25,8 @@ API_ID = 12345678  # Замените на ваш API_ID
 API_HASH = "your_api_hash_here"  # Замените на ваш API_HASH
 CHANNEL_USERNAME = "@MaxisKzn"  # Канал для парсинга
 
-# Папки для сохранения (в той же директории, где запущен скрипт)
-SCRIPT_DIR = Path(__file__).parent.resolve()
+# Папки для сохранения (в той же директории, где физически лежит скрипт)
+SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = SCRIPT_DIR / "maxiskzn_data"
 POSTS_JSON = DATA_DIR / "posts.json"
 IMAGES_DIR = DATA_DIR / "images"
