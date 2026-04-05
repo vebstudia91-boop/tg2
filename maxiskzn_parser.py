@@ -60,31 +60,27 @@ async def download_images(client: TelegramClient, message: Message, post_id: str
     if not message.media:
         return downloaded_files
     
-    media = message.media
-    
-    # Обработка альбома фотографий (MessageMediaGroup)
-    from telethon.tl.types import MessageMediaGroup
-    
-    if isinstance(media, MessageMediaGroup) and hasattr(media, 'grouped_id') and media.grouped_id:
-        # Получаем все сообщения из альбома
+    # Обработка альбома фотографий (проверяем grouped_id)
+    if message.grouped_id:
+        # Получаем все сообщения из альбома по grouped_id
         async for grouped_message in client.iter_messages(
             message.chat_id, 
-            filter=lambda m: m.grouped_id == media.grouped_id
+            filter=lambda m: m.grouped_id == message.grouped_id
         ):
             if grouped_message.media:
-                filename = await _download_single_image(grouped_message, post_id, len(downloaded_files))
+                filename = await _download_single_image(client, grouped_message, post_id, len(downloaded_files))
                 if filename:
                     downloaded_files.append(filename)
     else:
         # Обработка одиночного изображения
-        filename = await _download_single_image(message, post_id, 0)
+        filename = await _download_single_image(client, message, post_id, 0)
         if filename:
             downloaded_files.append(filename)
     
     return downloaded_files
 
 
-async def _download_single_image(message: Message, post_id: str, index: int) -> str | None:
+async def _download_single_image(client: TelegramClient, message: Message, post_id: str, index: int) -> str | None:
     """Скачивает одно изображение из сообщения."""
     media = message.media
     if not media:
