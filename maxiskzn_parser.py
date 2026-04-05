@@ -99,20 +99,26 @@ async def main():
         return
     
     # Загружаем существующие посты
-    existing_posts = load_existing_posts()
+    existing_posts = await load_existing_posts()
     print(f"Загружено {len(existing_posts)} существующих постов")
     
     # Счетчики
     new_posts_count = 0
     downloaded_images_count = 0
+    MAX_NEW_POSTS = 10  # Лимит на количество новых постов за один запуск
     
     # Получаем последние посты (последние 100)
     print("Получение постов...")
     
     async for message in client.iter_messages(channel, limit=100):
+        # Останавливаемся если достигли лимита новых постов
+        if new_posts_count >= MAX_NEW_POSTS:
+            print(f"Достигнут лимит новых постов ({MAX_NEW_POSTS})")
+            break
+            
         post_id = str(message.id)
         
-        # Пропускаем если пост уже есть
+        # Пропускаем если пост уже есть (проверка на дубликаты)
         if post_id in existing_posts:
             continue
         
