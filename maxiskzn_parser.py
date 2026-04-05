@@ -63,14 +63,19 @@ async def download_images(client: TelegramClient, message: Message, post_id: str
     # Обработка альбома фотографий (проверяем grouped_id)
     if message.grouped_id:
         # Получаем все сообщения из альбома по grouped_id
-        async for grouped_message in client.iter_messages(
-            message.chat_id, 
-            filter=lambda m: m.grouped_id == message.grouped_id
-        ):
-            if grouped_message.media:
-                filename = await _download_single_image(client, grouped_message, post_id, len(downloaded_files))
-                if filename:
-                    downloaded_files.append(filename)
+        album_messages = []
+        async for msg in client.iter_messages(message.chat_id, limit=10):
+            if msg.grouped_id == message.grouped_id and msg.media:
+                album_messages.append(msg)
+        
+        # Сортируем по ID чтобы сохранить порядок
+        album_messages.sort(key=lambda m: m.id)
+        
+        # Скачиваем все изображения из альбома
+        for idx, grouped_message in enumerate(album_messages):
+            filename = await _download_single_image(client, grouped_message, post_id, idx)
+            if filename:
+                downloaded_files.append(filename)
     else:
         # Обработка одиночного изображения
         filename = await _download_single_image(client, message, post_id, 0)
